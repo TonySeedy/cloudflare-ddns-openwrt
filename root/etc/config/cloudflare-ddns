@@ -1,0 +1,18 @@
+config settings 'settings'
+	option enabled '0'
+	option api_token ''
+	option interval '300'
+	option ip_source 'auto'
+	option ip_url 'https://api.ipify.org'
+	option ip_interface 'wan'
+	option ttl '120'
+	option log_file '/var/log/cloudflare-ddns.log'
+	option log_size '64'
+	option force_update '0'
+	option verbose '0'
+
+#config domain
+#	option name 'menu.example.com'
+#	option enabled '1'
+#	option proxied 'keep'
+#	option include_www '0'

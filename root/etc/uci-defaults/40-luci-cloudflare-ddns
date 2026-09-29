@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Bat dich vu o cap init (script van tu kiem tra option 'enabled' trong UCI)
+/etc/init.d/cloudflare-ddns enable >/dev/null 2>&1
+
+# Nap lai ACL cho giao dien LuCI
+/etc/init.d/rpcd reload >/dev/null 2>&1
+
+# Xoa cache menu cua LuCI de muc moi hien ra ngay
+rm -f /tmp/luci-indexcache* 2>/dev/null
+rm -rf /tmp/luci-modulecache 2>/dev/null
+
+exit 0

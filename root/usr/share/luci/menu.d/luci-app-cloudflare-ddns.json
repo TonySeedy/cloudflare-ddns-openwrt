@@ -1,0 +1,41 @@
+{
+	"admin/services/cloudflare-ddns": {
+		"title": "Cloudflare DDNS",
+		"order": 60,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-cloudflare-ddns"
+			],
+			"uci": {
+				"cloudflare-ddns": true
+			}
+		}
+	},
+	"admin/services/cloudflare-ddns/settings": {
+		"title": "Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "cloudflare-ddns/settings"
+		}
+	},
+	"admin/services/cloudflare-ddns/log": {
+		"title": "Log",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "cloudflare-ddns/log"
+		}
+	},
+	"admin/services/cloudflare-ddns/domains": {
+		"title": "Domains",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "cloudflare-ddns/domains"
+		}
+	}
+}

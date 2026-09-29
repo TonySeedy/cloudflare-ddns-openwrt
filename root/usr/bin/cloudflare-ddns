@@ -1,0 +1,486 @@
+#!/bin/sh
+# Cloudflare DDNS for OpenWrt
+# Cap nhat ban ghi A tren Cloudflare theo IP WAN hien tai.
+# Usage: cloudflare-ddns [update|force|daemon|check|zones|status]
+
+. /lib/functions.sh
+
+API="https://api.cloudflare.com/client/v4"
+CONF="cloudflare-ddns"
+RUNDIR="/var/run/cloudflare-ddns"
+STATUS_FILE="$RUNDIR/status.json"
+CACHE_FILE="$RUNDIR/zones.cache"
+IP_FILE="$RUNDIR/last_ip"
+LOCK_FILE="/var/lock/cloudflare-ddns.lock"
+
+# --- cai dat toan cuc (nap tu UCI) ---
+api_token=""
+enabled="0"
+interval="300"
+ip_source="url"
+ip_url="https://api.ipify.org"
+ip_interface="wan"
+ttl="120"
+log_file="/var/log/cloudflare-ddns.log"
+log_size="64"
+force_update="0"
+verbose="0"
+
+CHANGED=0
+FAILED=0
+STATUS_ROWS=""
+
+json_esc() {
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\r\n'
+}
+
+log() {
+	local lvl="$1"
+	shift
+	local line
+	line="$(date '+%Y-%m-%d %H:%M:%S') [$lvl] $*"
+	# ra stderr de khong lam ban gia tri tra ve cua cac ham dung $(...)
+	echo "$line" >&2
+	[ -n "$log_file" ] || return 0
+	mkdir -p "$(dirname "$log_file")" 2>/dev/null
+	echo "$line" >> "$log_file" 2>/dev/null
+	if [ -f "$log_file" ] && [ "${log_size:-0}" -gt 0 ] 2>/dev/null; then
+		local sz
+		sz=$(( $(wc -c < "$log_file") / 1024 ))
+		if [ "$sz" -gt "$log_size" ]; then
+			tail -n 200 "$log_file" > "$log_file.tmp" 2>/dev/null && mv "$log_file.tmp" "$log_file"
+		fi
+	fi
+	return 0
+}
+
+dbg() {
+	[ "$verbose" = "1" ] && log DEBUG "$@"
+	return 0
+}
+
+load_settings() {
+	config_load "$CONF" || return 1
+	config_get api_token    settings api_token    ""
+	config_get enabled      settings enabled      "0"
+	config_get interval     settings interval     "300"
+	config_get ip_source    settings ip_source    "url"
+	config_get ip_url       settings ip_url       "https://api.ipify.org"
+	config_get ip_interface settings ip_interface "wan"
+	config_get ttl          settings ttl          "120"
+	config_get log_file     settings log_file     "/var/log/cloudflare-ddns.log"
+	config_get log_size     settings log_size     "64"
+	config_get force_update settings force_update "0"
+	config_get verbose      settings verbose      "0"
+	[ "${interval:-0}" -ge 60 ] 2>/dev/null || interval=300
+	return 0
+}
+
+# --- lay IP hien tai ---
+get_ip_from_interface() {
+	local iface="$1"
+	local ip=""
+	if [ -f /lib/functions/network.sh ]; then
+		. /lib/functions/network.sh
+		network_flush_cache
+		network_get_ipaddr ip "$iface"
+	fi
+	[ -n "$ip" ] || ip=$(ubus call "network.interface.$iface" status 2>/dev/null | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null)
+	echo "$ip"
+}
+
+get_ip_from_url() {
+	curl -fsS --max-time 15 "$ip_url" 2>/dev/null | tr -d ' \t\r\n'
+}
+
+is_ipv4() {
+	local ip="$1" rest o n=0
+
+	echo "$ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || return 1
+
+	# kiem tra tung octet <= 255 (grep o tren van cho qua 999.999.999.999)
+	rest="$ip"
+	while [ -n "$rest" ]; do
+		o="${rest%%.*}"
+		case "$rest" in
+		*.*) rest="${rest#*.}" ;;
+		*) rest="" ;;
+		esac
+		[ "$o" -le 255 ] 2>/dev/null || return 1
+		n=$((n + 1))
+	done
+	[ "$n" -eq 4 ] || return 1
+
+	# khong bao gio chap nhan dia chi vo nghia
+	case "$ip" in
+	0.0.0.0 | 255.255.255.255 | 127.*) return 1 ;;
+	esac
+	return 0
+}
+
+# Tra ve 0 neu la IP public, 1 neu la IP private/CGNAT/loopback/multicast
+is_public_ip() {
+	local ip="$1" o1 o2
+	o1="${ip%%.*}"
+	o2="${ip#*.}"
+	o2="${o2%%.*}"
+
+	case "$o1" in
+	0 | 10 | 127) return 1 ;;
+	169) [ "$o2" = "254" ] && return 1 ;;
+	172) [ "$o2" -ge 16 ] 2>/dev/null && [ "$o2" -le 31 ] && return 1 ;;
+	192) [ "$o2" = "168" ] && return 1 ;;
+	100) [ "$o2" -ge 64 ] 2>/dev/null && [ "$o2" -le 127 ] && return 1 ;;
+	esac
+
+	[ "$o1" -ge 224 ] 2>/dev/null && return 1
+	return 0
+}
+
+get_current_ip() {
+	local ip=""
+
+	case "$ip_source" in
+	interface)
+		# chi lay tren router
+		ip=$(get_ip_from_interface "$ip_interface")
+		;;
+	url)
+		# chi hoi dich vu ben ngoai
+		ip=$(get_ip_from_url)
+		;;
+	*)
+		# auto: uu tien interface tren router, chi hoi ben ngoai khi can
+		ip=$(get_ip_from_interface "$ip_interface")
+		if is_ipv4 "$ip" && is_public_ip "$ip"; then
+			dbg "IP lấy từ interface '$ip_interface': $ip"
+		else
+			if [ -n "$ip" ]; then
+				dbg "IP trên interface '$ip_interface' là $ip (private/không hợp lệ), chuyển sang $ip_url"
+			else
+				dbg "Không đọc được IP trên interface '$ip_interface', chuyển sang $ip_url"
+			fi
+			ip=$(get_ip_from_url)
+			dbg "IP lấy từ $ip_url: $ip"
+		fi
+		;;
+	esac
+
+	is_ipv4 "$ip" || return 1
+	echo "$ip"
+}
+
+# --- goi API Cloudflare ---
+cf_api() {
+	local method="$1"
+	local path="$2"
+	local body="$3"
+
+	if [ -n "$body" ]; then
+		curl -sS --max-time 20 -X "$method" \
+			-H "Authorization: Bearer $api_token" \
+			-H "Content-Type: application/json" \
+			--data "$body" "$API$path" 2>/dev/null
+	else
+		curl -sS --max-time 20 -X "$method" \
+			-H "Authorization: Bearer $api_token" \
+			-H "Content-Type: application/json" \
+			"$API$path" 2>/dev/null
+	fi
+}
+
+api_ok() {
+	echo "$1" | jsonfilter -e '@.success' 2>/dev/null | grep -q true
+}
+
+# BusyBox flock khong co -w (timeout), chi co -n. Thu lai vai lan cho den khi lay duoc.
+acquire_lock() {
+	local tries=0
+
+	command -v flock > /dev/null 2>&1 || return 0
+
+	while [ "$tries" -lt 20 ]; do
+		flock -n 9 2>/dev/null && return 0
+		tries=$((tries + 1))
+		sleep 1
+	done
+	return 1
+}
+
+# '*' trong query string can duoc ma hoa
+url_escape() {
+	echo "$1" | sed 's/\*/%2A/g'
+}
+
+api_error() {
+	local msg
+	msg=$(echo "$1" | jsonfilter -e '@.errors[*].message' 2>/dev/null | tr '\n' ';')
+	[ -n "$msg" ] || msg="phản hồi không hợp lệ từ API"
+	echo "$msg"
+}
+
+# --- zone id (co cache) ---
+cache_get() {
+	[ -f "$CACHE_FILE" ] || return 1
+	local v
+	v=$(grep -m1 "^$1=" "$CACHE_FILE" 2>/dev/null | cut -d= -f2-)
+	[ -n "$v" ] || return 1
+	echo "$v"
+}
+
+cache_set() {
+	mkdir -p "$RUNDIR"
+	touch "$CACHE_FILE"
+	grep -v "^$1=" "$CACHE_FILE" > "$CACHE_FILE.tmp" 2>/dev/null
+	echo "$1=$2" >> "$CACHE_FILE.tmp"
+	mv "$CACHE_FILE.tmp" "$CACHE_FILE"
+}
+
+get_zone_id() {
+	# cat dan tung nhan cua domain de tim zone: a.b.com -> b.com -> com
+	local name="$1"
+	local cached resp zid candidate
+
+	cached=$(cache_get "$name") && {
+		echo "$cached"
+		return 0
+	}
+
+	# bo nhan wildcard truoc khi tra cuu zone: *.s3.vidu.com -> s3.vidu.com
+	candidate="${name#\*.}"
+	while [ -n "$candidate" ]; do
+		case "$candidate" in
+		*.*)
+			resp=$(cf_api GET "/zones?name=$candidate")
+			if api_ok "$resp"; then
+				zid=$(echo "$resp" | jsonfilter -e '@.result[0].id' 2>/dev/null)
+				if [ -n "$zid" ]; then
+					cache_set "$name" "$zid"
+					echo "$zid"
+					return 0
+				fi
+			else
+				log ERROR "Lỗi tra cứu zone '$candidate': $(api_error "$resp")"
+				return 1
+			fi
+			candidate="${candidate#*.}"
+			;;
+		*)
+			candidate=""
+			;;
+		esac
+	done
+	return 1
+}
+
+list_zones() {
+	local resp
+	resp=$(cf_api GET "/zones?per_page=50&page=1")
+	if api_ok "$resp"; then
+		echo "$resp" | jsonfilter -e '@.result[*].name' 2>/dev/null
+		return 0
+	fi
+	echo "ERROR: $(api_error "$resp")"
+	return 1
+}
+
+add_row() {
+	STATUS_ROWS="$STATUS_ROWS{\"name\":\"$(json_esc "$1")\",\"state\":\"$2\",\"ip\":\"$(json_esc "$3")\",\"message\":\"$(json_esc "$4")\"},"
+}
+
+# --- xu ly mot ban ghi ---
+update_record() {
+	local fqdn="$1"
+	local want_proxy="$2"
+	local rec_ttl="$3"
+	local ip="$4"
+	local zid resp rid cur_ip cur_proxy proxied payload err
+
+	zid=$(get_zone_id "$fqdn")
+	if [ -z "$zid" ]; then
+		log ERROR "$fqdn: không tìm thấy zone trên tài khoản Cloudflare"
+		add_row "$fqdn" "error" "" "không tìm thấy zone"
+		FAILED=$((FAILED + 1))
+		return 1
+	fi
+
+	resp=$(cf_api GET "/zones/$zid/dns_records?type=A&name=$(url_escape "$fqdn")")
+	if ! api_ok "$resp"; then
+		err=$(api_error "$resp")
+		log ERROR "$fqdn: lỗi đọc bản ghi DNS: $err"
+		add_row "$fqdn" "error" "" "$err"
+		FAILED=$((FAILED + 1))
+		return 1
+	fi
+
+	rid=$(echo "$resp" | jsonfilter -e '@.result[0].id' 2>/dev/null)
+	cur_ip=$(echo "$resp" | jsonfilter -e '@.result[0].content' 2>/dev/null)
+	cur_proxy=$(echo "$resp" | jsonfilter -e '@.result[0].proxied' 2>/dev/null)
+
+	if [ -z "$rid" ]; then
+		log WARN "$fqdn: không có bản ghi A (hãy tạo trước trên Cloudflare)"
+		add_row "$fqdn" "missing" "" "chưa có bản ghi A"
+		FAILED=$((FAILED + 1))
+		return 1
+	fi
+
+	case "$want_proxy" in
+	1 | on | true) proxied="true" ;;
+	0 | off | false) proxied="false" ;;
+	*) proxied="${cur_proxy:-false}" ;;
+	esac
+
+	if [ "$cur_ip" = "$ip" ] && [ "$cur_proxy" = "$proxied" ]; then
+		dbg "$fqdn: đã đúng IP $ip, bỏ qua"
+		add_row "$fqdn" "ok" "$ip" "không thay đổi"
+		return 0
+	fi
+
+	payload="{\"type\":\"A\",\"name\":\"$fqdn\",\"content\":\"$ip\",\"ttl\":${rec_ttl:-120},\"proxied\":$proxied}"
+	resp=$(cf_api PUT "/zones/$zid/dns_records/$rid" "$payload")
+	if api_ok "$resp"; then
+		log INFO "$fqdn: đã cập nhật $cur_ip -> $ip (proxied=$proxied, ttl=${rec_ttl:-120})"
+		add_row "$fqdn" "updated" "$ip" "$cur_ip -> $ip"
+		CHANGED=$((CHANGED + 1))
+		return 0
+	fi
+
+	err=$(api_error "$resp")
+	log ERROR "$fqdn: cập nhật thất bại: $err"
+	add_row "$fqdn" "error" "$cur_ip" "$err"
+	FAILED=$((FAILED + 1))
+	return 1
+}
+
+handle_domain() {
+	local cfg="$1"
+	local ip="$2"
+	local name d_enabled proxied d_ttl www
+
+	config_get name "$cfg" name ""
+	config_get d_enabled "$cfg" enabled "1"
+	config_get proxied "$cfg" proxied "keep"
+	config_get d_ttl "$cfg" ttl ""
+	config_get_bool www "$cfg" include_www 0
+
+	[ -n "$name" ] || return 0
+	if [ "$d_enabled" != "1" ]; then
+		dbg "$name: bị tắt, bỏ qua"
+		return 0
+	fi
+	[ -n "$d_ttl" ] || d_ttl="$ttl"
+
+	update_record "$name" "$proxied" "$d_ttl" "$ip"
+
+	# 'www.*.vidu.com' la vo nghia, bo qua tuy chon www voi ban ghi wildcard
+	case "$name" in
+	\**) ;;
+	*) [ "$www" = "1" ] && update_record "www.$name" "$proxied" "$d_ttl" "$ip" ;;
+	esac
+	return 0
+}
+
+write_status() {
+	local ip="$1"
+	local state="$2"
+	local msg="$3"
+	mkdir -p "$RUNDIR"
+	printf '{"time":"%s","timestamp":%s,"ip":"%s","state":"%s","message":"%s","changed":%s,"failed":%s,"records":[%s]}\n' \
+		"$(date '+%Y-%m-%d %H:%M:%S')" "$(date +%s)" "$(json_esc "$ip")" \
+		"$(json_esc "$state")" "$(json_esc "$msg")" "$CHANGED" "$FAILED" \
+		"${STATUS_ROWS%,}" > "$STATUS_FILE"
+}
+
+do_update() {
+	local mode="$1"
+	local ip last
+
+	load_settings || {
+		log ERROR "Không đọc được cấu hình UCI '$CONF'"
+		return 1
+	}
+
+	if [ -z "$api_token" ]; then
+		log ERROR "Chưa cấu hình API Token"
+		write_status "" "error" "chưa cấu hình API Token"
+		return 1
+	fi
+
+	ip=$(get_current_ip)
+	if [ -z "$ip" ]; then
+		log ERROR "Không lấy được IP WAN hiện tại (nguồn: $ip_source)"
+		write_status "" "error" "không lấy được IP WAN"
+		return 1
+	fi
+
+	last=$(cat "$IP_FILE" 2>/dev/null)
+	if [ "$ip" = "$last" ] && [ "$force_update" != "1" ] && [ "$mode" != "force" ]; then
+		dbg "IP không đổi ($ip), bỏ qua chu kỳ này"
+		STATUS_ROWS=""
+		write_status "$ip" "ok" "IP không đổi"
+		return 0
+	fi
+
+	log INFO "IP WAN hiện tại: $ip"
+	CHANGED=0
+	FAILED=0
+	STATUS_ROWS=""
+	config_foreach handle_domain domain "$ip"
+
+	mkdir -p "$RUNDIR"
+	if [ "$FAILED" -eq 0 ]; then
+		echo "$ip" > "$IP_FILE"
+		write_status "$ip" "ok" "$CHANGED bản ghi được cập nhật"
+	else
+		write_status "$ip" "error" "$FAILED bản ghi lỗi, $CHANGED bản ghi được cập nhật"
+	fi
+	log INFO "Hoàn tất: cập nhật=$CHANGED lỗi=$FAILED"
+	[ "$FAILED" -eq 0 ]
+}
+
+do_daemon() {
+	load_settings
+	log INFO "Dịch vụ khởi động (chu kỳ ${interval}s)"
+	while :; do
+		load_settings
+		if [ "$enabled" = "1" ]; then
+			do_update
+		else
+			dbg "Dịch vụ đang tắt trong cấu hình"
+		fi
+		sleep "$interval"
+	done
+}
+
+case "${1:-update}" in
+update | force)
+	mkdir -p "$(dirname "$LOCK_FILE")" 2>/dev/null
+	exec 9> "$LOCK_FILE"
+	acquire_lock || {
+		echo "Đang có tiến trình cập nhật khác chạy, thử lại sau"
+		exit 1
+	}
+	do_update "$1"
+	;;
+daemon)
+	do_daemon
+	;;
+check)
+	load_settings
+	get_current_ip || {
+		echo "không lấy được IP"
+		exit 1
+	}
+	;;
+zones)
+	load_settings
+	list_zones
+	;;
+status)
+	cat "$STATUS_FILE" 2>/dev/null || echo '{"state":"unknown"}'
+	;;
+*)
+	echo "Usage: $0 {update|force|daemon|check|zones|status}" >&2
+	exit 1
+	;;
+esac

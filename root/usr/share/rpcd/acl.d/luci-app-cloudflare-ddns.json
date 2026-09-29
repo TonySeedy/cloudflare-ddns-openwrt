@@ -1,0 +1,29 @@
+{
+	"luci-app-cloudflare-ddns": {
+		"description": "Grant access to Cloudflare DDNS configuration",
+		"read": {
+			"uci": [ "cloudflare-ddns" ],
+			"ubus": {
+				"service": [ "list" ],
+				"file": [ "exec", "read", "stat" ]
+			},
+			"file": {
+				"/usr/bin/cloudflare-ddns": [ "exec" ],
+				"/etc/init.d/cloudflare-ddns": [ "exec" ],
+				"/var/log/cloudflare-ddns.log": [ "read" ],
+				"/var/run/cloudflare-ddns/status.json": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "cloudflare-ddns" ],
+			"ubus": {
+				"file": [ "exec", "write", "remove" ]
+			},
+			"file": {
+				"/usr/bin/cloudflare-ddns": [ "exec" ],
+				"/etc/init.d/cloudflare-ddns": [ "exec" ],
+				"/var/log/cloudflare-ddns.log": [ "write" ]
+			}
+		}
+	}
+}

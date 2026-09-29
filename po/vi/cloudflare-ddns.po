@@ -1,0 +1,308 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: vi\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Cloudflare DDNS"
+msgstr "Cloudflare DDNS"
+
+msgid "Settings"
+msgstr "Cấu hình"
+
+msgid "Log"
+msgstr "Nhật ký"
+
+msgid "Cloudflare DDNS - Log"
+msgstr "Cloudflare DDNS - Nhật ký"
+
+msgid ""
+"Automatically keep Cloudflare A records pointed at this router's current WAN "
+"IP address."
+msgstr ""
+"Tự động trỏ các bản ghi A trên Cloudflare về địa chỉ IP WAN hiện tại của "
+"router."
+
+msgid "Status"
+msgstr "Trạng thái"
+
+msgid "Service"
+msgstr "Dịch vụ"
+
+msgid "Running"
+msgstr "Đang chạy"
+
+msgid "Stopped"
+msgstr "Đã dừng"
+
+msgid "Current WAN IP"
+msgstr "IP WAN hiện tại"
+
+msgid "Last check"
+msgstr "Lần kiểm tra gần nhất"
+
+msgid "never"
+msgstr "chưa từng"
+
+msgid "Result"
+msgstr "Kết quả"
+
+msgid "Records"
+msgstr "Danh sách bản ghi"
+
+msgid "Hostname"
+msgstr "Tên miền"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "State"
+msgstr "Trạng thái"
+
+msgid "Detail"
+msgstr "Chi tiết"
+
+msgid "OK"
+msgstr "Bình thường"
+
+msgid "Updated"
+msgstr "Đã cập nhật"
+
+msgid "Error"
+msgstr "Lỗi"
+
+msgid "No A record"
+msgstr "Chưa có bản ghi A"
+
+msgid "Unknown"
+msgstr "Chưa rõ"
+
+msgid "General settings"
+msgstr "Cài đặt chung"
+
+msgid "Enable"
+msgstr "Bật"
+
+msgid "Start the update service automatically at boot."
+msgstr "Tự động chạy dịch vụ cập nhật khi router khởi động."
+
+msgid "Cloudflare API Token"
+msgstr "API Token của Cloudflare"
+
+msgid ""
+"Create at <em>My Profile &gt; API Tokens</em> with permission <em>Zone &gt; "
+"DNS &gt; Edit</em>."
+msgstr ""
+"Tạo tại <em>My Profile &gt; API Tokens</em> với quyền <em>Zone &gt; DNS &gt; "
+"Edit</em>."
+
+msgid "Token looks too short"
+msgstr "Token có vẻ quá ngắn"
+
+msgid "Check interval (seconds)"
+msgstr "Chu kỳ kiểm tra (giây)"
+
+msgid "How often to check for a WAN IP change. Minimum 60."
+msgstr "Bao lâu kiểm tra IP WAN một lần. Tối thiểu 60 giây."
+
+msgid "WAN IP source"
+msgstr "Nguồn lấy IP WAN"
+
+msgid ""
+"Automatic reads the IP from the router first and only queries the external "
+"service when that address is private (router behind NAT)."
+msgstr ""
+"Chế độ tự động đọc IP trên router trước, chỉ hỏi dịch vụ bên ngoài khi địa "
+"chỉ đó là IP private (router nằm sau NAT)."
+
+msgid "Automatic: router interface first, external service as fallback"
+msgstr "Tự động: ưu tiên interface trên router, dự phòng bằng dịch vụ ngoài"
+
+msgid "Router interface only"
+msgstr "Chỉ lấy từ interface trên router"
+
+msgid "External service only"
+msgstr "Chỉ lấy từ dịch vụ bên ngoài"
+
+msgid "IP detection URL"
+msgstr "URL kiểm tra IP"
+
+msgid "Used as the fallback in automatic mode."
+msgstr "Dùng làm phương án dự phòng ở chế độ tự động."
+
+msgid "Network interface"
+msgstr "Giao diện mạng"
+
+msgid "The interface the WAN IP is read from, usually wan."
+msgstr "Interface dùng để đọc IP WAN, thường là wan."
+
+msgid "Default TTL"
+msgstr "TTL mặc định"
+
+msgid "1 = automatic. Ignored when a record is proxied."
+msgstr "1 = tự động. Bị bỏ qua nếu bản ghi bật proxy."
+
+msgid "Always push update"
+msgstr "Luôn gửi cập nhật"
+
+msgid "Send the update every cycle even when the WAN IP has not changed."
+msgstr "Gửi cập nhật mỗi chu kỳ kể cả khi IP WAN không đổi."
+
+msgid "Verbose logging"
+msgstr "Ghi nhật ký chi tiết"
+
+msgid "Max log size (KB)"
+msgstr "Dung lượng nhật ký tối đa (KB)"
+
+msgid "Domains"
+msgstr "Tên miền"
+
+msgid ""
+"The A record must already exist in Cloudflare. Sub-domains are matched to "
+"their zone automatically."
+msgstr ""
+"Bản ghi A phải có sẵn trên Cloudflare. Tên miền con sẽ được tự động dò ra "
+"zone tương ứng."
+
+msgid "Add domain"
+msgstr "Thêm tên miền"
+
+msgid "For example example.com or menu.example.com"
+msgstr "Ví dụ: example.com hoặc menu.example.com"
+
+msgid "Hostname is required"
+msgstr "Bắt buộc nhập tên miền"
+
+msgid "Invalid hostname"
+msgstr "Tên miền không hợp lệ"
+
+msgid "Cloudflare proxy"
+msgstr "Proxy Cloudflare"
+
+msgid "Keep current setting"
+msgstr "Giữ nguyên như hiện tại"
+
+msgid "Proxied (orange cloud)"
+msgstr "Bật proxy (mây cam)"
+
+msgid "DNS only (grey cloud)"
+msgstr "Chỉ DNS (mây xám)"
+
+msgid "Also update www."
+msgstr "Cập nhật thêm www."
+
+msgid "Additionally update the www prefix of this hostname."
+msgstr "Cập nhật thêm bản ghi www của tên miền này."
+
+msgid "TTL"
+msgstr "TTL"
+
+msgid "Leave empty to use the default TTL."
+msgstr "Để trống để dùng TTL mặc định."
+
+msgid "default"
+msgstr "mặc định"
+
+msgid "Update now"
+msgstr "Cập nhật ngay"
+
+msgid "Test token / list zones"
+msgstr "Kiểm tra token / liệt kê zone"
+
+msgid "Detect WAN IP"
+msgstr "Dò IP WAN"
+
+msgid "Restart service"
+msgstr "Khởi động lại dịch vụ"
+
+msgid "Service restarted"
+msgstr "Đã khởi động lại dịch vụ"
+
+msgid "Updating DNS records"
+msgstr "Đang cập nhật bản ghi DNS"
+
+msgid "Zones on this account"
+msgstr "Các zone trong tài khoản"
+
+msgid "Detected WAN IP"
+msgstr "IP WAN dò được"
+
+msgid "Working, please wait..."
+msgstr "Đang xử lý, vui lòng đợi..."
+
+msgid "No output"
+msgstr "Không có kết quả trả về"
+
+msgid "Command failed: %s"
+msgstr "Lệnh thất bại: %s"
+
+msgid "Close"
+msgstr "Đóng"
+
+msgid "Live view of %s, refreshed every 5 seconds."
+msgstr "Xem trực tiếp %s, tự làm mới mỗi 5 giây."
+
+msgid "Log file is empty or has not been created yet."
+msgstr "Nhật ký trống hoặc chưa được tạo."
+
+msgid "Refresh"
+msgstr "Làm mới"
+
+msgid "Clear log"
+msgstr "Xóa nhật ký"
+
+msgid "Log cleared"
+msgstr "Đã xóa nhật ký"
+
+msgid "Cannot clear log: %s"
+msgstr "Không xóa được nhật ký: %s"
+
+msgid "Bulk edit domains"
+msgstr "Nhập danh sách tên miền"
+
+msgid ""
+"One hostname per line. Empty lines and lines starting with # are ignored, "
+"duplicates are dropped."
+msgstr ""
+"Mỗi dòng một tên miền. Dòng trống và dòng bắt đầu bằng # sẽ bị bỏ qua, tên "
+"miền trùng chỉ giữ một."
+
+msgid ""
+"New hostnames are added as enabled, with the Cloudflare proxy setting left "
+"untouched. Hostnames you delete from this list are removed together with "
+"their per-domain settings."
+msgstr ""
+"Tên miền mới được thêm ở trạng thái bật, giữ nguyên thiết lập proxy trên "
+"Cloudflare. Tên miền anh xoá khỏi danh sách này sẽ bị gỡ kèm theo toàn bộ "
+"tuỳ chỉnh riêng của nó."
+
+msgid "Apply list"
+msgstr "Áp dụng danh sách"
+
+msgid "Cancel"
+msgstr "Huỷ"
+
+msgid "Invalid hostname — %s"
+msgstr "Tên miền không hợp lệ — %s"
+
+msgid "line %d: %s"
+msgstr "dòng %d: %s"
+
+msgid "The list is unchanged."
+msgstr "Danh sách không có gì thay đổi."
+
+msgid "Added: %d, removed: %d."
+msgstr "Đã thêm: %d, đã xoá: %d."
+
+msgid "The list has been staged. Press "
+msgstr "Danh sách đã được ghi nhận. Bấm "
+
+msgid "Save & Apply"
+msgstr "Save & Apply"
+
+msgid " on the page to activate it."
+msgstr " trên trang để kích hoạt."
+
+
+msgid "Reload page"
+msgstr "Tải lại trang"
